@@ -203,27 +203,30 @@ function setFormError(id, message) {
 function clearFormErrors() {
   $('login-error').classList.add('hidden')
   $('register-error').classList.add('hidden')
+  $('restore-error').classList.add('hidden')
 }
 
-$('tab-login').addEventListener('click', () => {
-  $('tab-login').classList.add('active')
-  $('tab-login').setAttribute('aria-selected', 'true')
-  $('tab-register').classList.remove('active')
-  $('tab-register').setAttribute('aria-selected', 'false')
-  $('form-login').classList.remove('hidden')
-  $('form-register').classList.add('hidden')
-  clearFormErrors()
-})
+// Generalized so adding a third (or later, fourth) tab doesn't mean
+// duplicating the same active/hidden toggling logic per tab pair.
+const accountTabs = [
+  { tab: 'tab-login', form: 'form-login' },
+  { tab: 'tab-register', form: 'form-register' },
+  { tab: 'tab-restore', form: 'form-restore' }
+]
 
-$('tab-register').addEventListener('click', () => {
-  $('tab-register').classList.add('active')
-  $('tab-register').setAttribute('aria-selected', 'true')
-  $('tab-login').classList.remove('active')
-  $('tab-login').setAttribute('aria-selected', 'false')
-  $('form-register').classList.remove('hidden')
-  $('form-login').classList.add('hidden')
+function activateAccountTab(activeTabId) {
+  for (const { tab, form } of accountTabs) {
+    const isActive = tab === activeTabId
+    $(tab).classList.toggle('active', isActive)
+    $(tab).setAttribute('aria-selected', String(isActive))
+    $(form).classList.toggle('hidden', !isActive)
+  }
   clearFormErrors()
-})
+}
+
+for (const { tab } of accountTabs) {
+  $(tab).addEventListener('click', () => activateAccountTab(tab))
+}
 
 $('form-login').addEventListener('submit', async (e) => {
   e.preventDefault()
@@ -269,6 +272,38 @@ $('form-register').addEventListener('submit', async (e) => {
   }
 })
 
+// Restore backup — the actual point of this: recover an account that no
+// longer exists (e.g. after a free-tier redeploy wiped data/users.json),
+// without needing to register a new one first. Works while logged out.
+$('form-restore').addEventListener('submit', async (e) => {
+  e.preventDefault()
+  clearFormErrors()
+
+  const fileInput = $('restore-file')
+  const file = fileInput.files?.[0]
+  if (!file) {
+    setFormError('restore-error', 'Choose a backup file first.')
+    return
+  }
+
+  try {
+    const fileContents = await file.text()
+    const res = await fetch('/account/restore-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileContents })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Could not restore that backup.')
+
+    fileInput.value = ''
+    showToast(`Welcome back, ${data.username}`)
+    onAppLoggedIn(data.username)
+  } catch (err) {
+    setFormError('restore-error', err.message)
+  }
+})
+
 function onAppLoggedIn(username) {
   $('topbar-username').textContent = username
   checkStatus()
@@ -300,35 +335,57 @@ $('btn-logout').addEventListener('click', async () => {
 })
 
 // ---------------------------------------------------------------------
-// Xbox session export/import — the actual workaround for Render's free
-// tier wiping local disk on every redeploy. The exported file contains
-// real Xbox Live tokens; treat it like a password in every user-facing
-// string here, not just the docs.
+// Account + Xbox session export/import.
+//
+// "Export backup" (primary, recommended) bundles the account itself
+// (username + password hash) together with the Xbox session, so it can
+// be restored from the logged-out screen even after data/users.json is
+// wiped — see the "Restore backup" tab/form above. "Export Xbox session
+// only" / "Import Xbox session only" are the older, narrower mechanism:
+// they only ever touch Xbox tokens, require being logged in already, and
+// are still useful for moving a connection between two accounts you
+// already control.
+//
+// Every one of these files contains real Xbox Live tokens (and the
+// backup additionally contains a password hash); treat them like a
+// password in every user-facing string here, not just the docs.
 // ---------------------------------------------------------------------
+
+async function downloadFromRoute(url, fallbackFilename) {
+  const res = await fetch(url)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Could not export that file.')
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const filenameMatch = disposition.match(/filename="([^"]+)"/)
+  const filename = filenameMatch ? filenameMatch[1] : fallbackFilename
+
+  const downloadUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = downloadUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(downloadUrl)
+}
+
+$('btn-export-backup').addEventListener('click', async () => {
+  try {
+    await downloadFromRoute('/account/export-backup', 'xcloud-web-backup.json')
+    showToast('Backup exported — keep this file private, it works like a password')
+  } catch (err) {
+    showToast(err.message, { error: true })
+  }
+})
 
 $('btn-export-session').addEventListener('click', async () => {
   try {
-    const res = await fetch('/account/export-xbox-session')
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.error || 'Could not export your session.')
-    }
-
-    const blob = await res.blob()
-    const disposition = res.headers.get('Content-Disposition') || ''
-    const filenameMatch = disposition.match(/filename="([^"]+)"/)
-    const filename = filenameMatch ? filenameMatch[1] : 'xcloud-web-session.json'
-
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-
-    showToast('Session exported — keep this file private, it works like a password')
+    await downloadFromRoute('/account/export-xbox-session', 'xcloud-web-session.json')
+    showToast('Xbox session exported — keep this file private, it works like a password')
   } catch (err) {
     showToast(err.message, { error: true })
   }
@@ -1051,29 +1108,56 @@ function renderDiagnostics() {
 
 $('input-indicator').addEventListener('click', toggleDiagnostics)
 
+// Runs a teardown step and swallows any error it throws, logging it
+// instead. stopStream() chains several teardown calls into third-party
+// library internals (Player.destroy(), Gamepad.detach()) that were
+// confirmed to reach into WebRTC/channel objects which may already be
+// gone or broken if the stream errored before Back was pressed — e.g.
+// Gamepad.detach() calls this._player._channels.control.sendGamepadState(),
+// which throws if _channels is already undefined. Previously, any one of
+// these throwing would abort the rest of stopStream() silently (browsers
+// don't visibly crash the page on an uncaught error in a click handler),
+// which is exactly why Back could appear to "close the session" — some
+// earlier teardown steps ran — "but not navigate": showScreen('library')
+// never got reached. Isolating each step means a failure here is now at
+// worst a console warning, never a blocked navigation.
+function safeTeardown(label, fn) {
+  try {
+    fn()
+  } catch (err) {
+    console.warn(`[stopStream] ${label} failed during teardown, continuing:`, err)
+  }
+}
+
 function stopStream() {
-  clearInterval(keepaliveInterval)
-  clearTimeout(hudHideTimer)
-  stopDiagnostics()
-  gamepad?.detach()
+  safeTeardown('clearInterval(keepaliveInterval)', () => clearInterval(keepaliveInterval))
+  safeTeardown('clearTimeout(hudHideTimer)', () => clearTimeout(hudHideTimer))
+  safeTeardown('stopDiagnostics', stopDiagnostics)
+
+  safeTeardown('gamepad.detach', () => gamepad?.detach())
   gamepad = null
-  window.removeEventListener('gamepadconnected', updateInputIndicator)
-  window.removeEventListener('gamepaddisconnected', updateInputIndicator)
+  safeTeardown('remove gamepad listeners', () => {
+    window.removeEventListener('gamepadconnected', updateInputIndicator)
+    window.removeEventListener('gamepaddisconnected', updateInputIndicator)
+  })
 
-  if (isFullscreen()) {
-    exitFullscreen()
-  }
+  safeTeardown('exitFullscreen', () => {
+    if (isFullscreen()) exitFullscreen()
+  })
 
-  if (player) {
-    player.destroy()
-    player = null
-  }
+  safeTeardown('player.destroy', () => {
+    if (player) player.destroy()
+  })
+  player = null
 
-  if (currentStream) {
-    currentStream.stop().catch(() => {})
-    currentStream = null
-  }
+  safeTeardown('currentStream.stop', () => {
+    if (currentStream) currentStream.stop().catch(() => {})
+  })
+  currentStream = null
 
+  // Navigation always happens, regardless of whether any teardown step
+  // above succeeded — this is the actual fix: getting back to the
+  // library screen must never depend on every cleanup call succeeding.
   showScreen('library')
   loadConsoles()
 }

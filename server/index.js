@@ -400,10 +400,130 @@ app.post('/account/logout', (req, res) => {
 })
 
 // -----------------------------------------------------------------------
-// Xbox session export/import — the workaround for Render's free tier
-// wiping local disk on every restart/redeploy. The exported file is the
-// raw xal-node token store JSON (real Xbox Live tokens) — treated like a
-// password in every user-facing string, not just the docs.
+// Full account backup / restore — this is the actual fix for "what good
+// is exporting my Xbox session if a wiped data/ also deletes my account,
+// so I have to register a NEW username before I can even see the import
+// button." The export now bundles the account (username + password hash)
+// together with the Xbox token file, and restore-backup works from the
+// logged-out account screen, before any login/registration — it recreates
+// the original account rather than requiring a fresh one first.
+//
+// Backward compatibility: the older export format (just the raw xal-node
+// token store JSON, no account info) is still accepted by
+// /account/import-xbox-session below for anyone who saved one of those
+// before this change, and that route still requires being logged in
+// first, since it only ever touched Xbox tokens, never account identity.
+// -----------------------------------------------------------------------
+
+const BACKUP_KIND = 'xcloud-web-full-backup-v1'
+
+app.get('/account/export-backup', requireAppLogin, attachTokenManager, (req, res) => {
+  const username = req.session.username
+  const users = loadUsers()
+  const userRecord = users[username]
+
+  if (!userRecord) {
+    // Shouldn't happen (you can't be logged in without a users.json
+    // entry), but don't crash if data/users.json was edited by hand.
+    res.status(500).json({ error: 'Could not find your account record to back up.' })
+    return
+  }
+
+  const manager = req.tokenManager
+  let xboxSession = {}
+  if (manager.tokenStore.getAuthenticationMethod() !== 'none' && fs.existsSync(manager.tokenFilePath)) {
+    try {
+      xboxSession = JSON.parse(fs.readFileSync(manager.tokenFilePath, 'utf8'))
+    } catch (err) {
+      console.error('[export-backup] Could not read/parse Xbox session file, exporting without it:', err)
+    }
+  }
+
+  const backup = {
+    kind: BACKUP_KIND,
+    username,
+    passwordSalt: userRecord.salt,
+    passwordHash: userRecord.hash,
+    xboxSession,
+    exportedAt: new Date().toISOString()
+  }
+
+  const filename = `xcloud-web-backup-${username}.json`
+  res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  res.send(JSON.stringify(backup, null, 2))
+})
+
+// No requireAppLogin here on purpose — this is how you get an account
+// back after data/ was wiped, which by definition means you can't log in
+// yet.
+app.post('/account/restore-backup', (req, res) => {
+  const { fileContents } = req.body || {}
+  if (typeof fileContents !== 'string' || fileContents.trim().length === 0) {
+    res.status(400).json({ error: 'No file contents received.' })
+    return
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(fileContents)
+  } catch (err) {
+    res.status(400).json({ error: 'That file is not valid JSON — is it really a backup file?' })
+    return
+  }
+
+  if (!parsed || parsed.kind !== BACKUP_KIND) {
+    res.status(400).json({
+      error: 'That doesn\u2019t look like a full backup file. Use "Export backup" from the library screen to make one — the older "Export session" format only restores Xbox tokens, not the account itself.'
+    })
+    return
+  }
+
+  const { username, passwordSalt, passwordHash, xboxSession } = parsed
+  if (typeof username !== 'string' || !USERNAME_PATTERN.test(username) ||
+      typeof passwordSalt !== 'string' || typeof passwordHash !== 'string') {
+    res.status(400).json({ error: 'That backup file is missing required account fields.' })
+    return
+  }
+
+  const users = loadUsers()
+  if (users[username]) {
+    res.status(409).json({
+      error: `An account named "${username}" already exists. If that's you, log in normally instead — restore is only for recreating an account that no longer exists.`
+    })
+    return
+  }
+
+  try {
+    users[username] = {
+      salt: passwordSalt,
+      hash: passwordHash,
+      createdAt: parsed.exportedAt || new Date().toISOString(),
+      restoredAt: new Date().toISOString()
+    }
+    saveUsers(users)
+
+    if (xboxSession && typeof xboxSession === 'object' && Object.keys(xboxSession).length > 0) {
+      const tokenFilePath = safeUsernameToFilename(username)
+      fs.writeFileSync(tokenFilePath, JSON.stringify(xboxSession, null, 2))
+      const manager = new TokenManager(tokenFilePath)
+      manager.load()
+      tokenManagers.set(username, manager)
+    }
+
+    req.session.username = username
+    res.json({ username })
+  } catch (err) {
+    console.error('[restore-backup] error:', err)
+    res.status(500).json({ error: 'Could not restore that backup.' })
+  }
+})
+
+// -----------------------------------------------------------------------
+// Xbox-session-only export/import (older, narrower mechanism) — still
+// useful if you just want to move an Xbox connection between two
+// accounts you already control, without touching account identity at
+// all. Requires being logged in already, unlike restore-backup above.
 // -----------------------------------------------------------------------
 
 app.get('/account/export-xbox-session', requireAppLogin, attachTokenManager, (req, res) => {
@@ -437,6 +557,17 @@ app.post('/account/import-xbox-session', requireAppLogin, attachTokenManager, (r
     parsed = JSON.parse(fileContents)
   } catch (err) {
     res.status(400).json({ error: 'That file is not valid JSON — is it really an exported session?' })
+    return
+  }
+
+  // Someone might drag in a full backup file here by mistake — point
+  // them at the right button instead of silently importing only the
+  // xboxSession sub-object (which would work, but hides that a fuller
+  // restore-backup option exists and is probably what they wanted).
+  if (parsed && parsed.kind === BACKUP_KIND) {
+    res.status(400).json({
+      error: 'That\u2019s a full account backup file, not a plain Xbox session export. Log out and use "Restore backup" on the login screen instead.'
+    })
     return
   }
 

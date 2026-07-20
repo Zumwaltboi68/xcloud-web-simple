@@ -100,6 +100,7 @@
         <div class="tab-row" role="tablist">
           <button id="tab-login" class="tab-btn active" role="tab" aria-selected="true">Log in</button>
           <button id="tab-register" class="tab-btn" role="tab" aria-selected="false">Create account</button>
+          <button id="tab-restore" class="tab-btn" role="tab" aria-selected="false">Restore backup</button>
         </div>
 
         <form id="form-login" class="account-form">
@@ -125,6 +126,22 @@
           <p class="field-hint">At least 8 characters.</p>
           <button type="submit" class="btn-primary">Create account</button>
           <p id="register-error" class="error hidden"></p>
+        </form>
+
+        <form id="form-restore" class="account-form hidden">
+          <p class="card-kicker">Restore backup</p>
+          <h2 class="card-heading">Bring back an old account</h2>
+          <p class="muted small">
+            If a redeploy wiped your account (common on hosting free tiers),
+            upload the backup file you downloaded from "Export backup" in
+            the library screen. This recreates your original username and
+            password and reconnects your Xbox session — no need to
+            register a new account first.
+          </p>
+          <label class="field-label" for="restore-file">Backup file</label>
+          <input id="restore-file" class="field-input" type="file" accept="application/json,.json" required />
+          <button type="submit" class="btn-primary">Restore account</button>
+          <p id="restore-error" class="error hidden"></p>
         </form>
       </div>
     </div>
@@ -195,8 +212,9 @@
       </span>
       <div class="topbar-actions">
         <span id="topbar-username" class="topbar-username muted small"></span>
-        <button id="btn-export-session" class="btn-link" title="Download your Xbox session as a file — keep it private, it works like a password">Export session</button>
-        <button id="btn-import-session" class="btn-link" title="Restore a previously exported Xbox session file">Import session</button>
+        <button id="btn-export-backup" class="btn-link" title="Download your account + Xbox session together — use this one for backups">Export backup</button>
+        <button id="btn-export-session" class="btn-link" title="Download only your Xbox session, without account info">Export Xbox session only</button>
+        <button id="btn-import-session" class="btn-link" title="Restore a previously exported Xbox-session-only file">Import Xbox session only</button>
         <input id="import-session-input" type="file" accept="application/json,.json" class="hidden" />
         <span class="topbar-divider" aria-hidden="true"></span>
         <button id="btn-signout" class="btn-link">Sign out of Xbox</button>

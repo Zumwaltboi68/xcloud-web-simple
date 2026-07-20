@@ -105,13 +105,20 @@ same tradeoff. Two ways to handle it:
   [Render disk](https://render.com/docs/disks) mounted at e.g. `/data`,
   and update `DATA_DIR` in `server/index.js` to point at it via an env
   var instead of the hardcoded `path.join(__dirname, '..', 'data')`.
-- **Export/Import session buttons**: each user can export their own Xbox
-  session as a file from the library screen's topbar, and re-import it
-  after a redeploy — a per-user workaround that needs no paid disk.
-  Registered *accounts* themselves aren't exportable the same way, though
-  — losing `data/users.json` on a free-tier redeploy means everyone needs
-  to register again, even if they still have their exported Xbox session
-  file ready to re-import once they do.
+- **Export backup / Restore backup** (no paid disk needed): click
+  "Export backup" in the library screen's topbar *before* a redeploy —
+  it downloads one file containing your account (username + password,
+  hashed) *and* your Xbox session together. After a redeploy wipes
+  `data/`, use the "Restore backup" tab on the login screen (works
+  without logging in first, since your account no longer exists at that
+  point) to recreate the exact same account and reconnect the same Xbox
+  session in one step — no re-registering under a new username, no
+  redoing the Microsoft device-code sign-in.
+
+  The older "Export Xbox session only" / "Import Xbox session only"
+  buttons still exist too, for the narrower case of moving an Xbox
+  connection between two accounts you already control — those don't
+  touch account identity and still require being logged in first.
 
 ## Deploying to Render
 
