@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>xCloud Web</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/style.css" />
+  <!-- The library's own compiled browser bundle (built by its authors,
+       shipped inside the npm package) — exposes window.xCloudPlayer with
+       { Player, ApiClient, Gamepad, MouseKeyboard, Touch }. -->
+  <script src="/vendor/xCloudPlayer.min.js"></script>
+</head>
+<body>
+
+  <div id="boot-screen" role="presentation">
+    <div class="boot-poweron" aria-hidden="true"></div>
+    <div class="boot-grid-far" aria-hidden="true"></div>
+    <div class="boot-grid" aria-hidden="true"></div>
+    <div class="boot-particles" aria-hidden="true">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="boot-scanline" aria-hidden="true"></div>
+    <div class="boot-scanline boot-scanline-2" aria-hidden="true"></div>
+
+    <div class="boot-hud" aria-hidden="true">
+      <div class="boot-corner tl"><svg viewBox="0 0 46 46"><path d="M2,24 L2,2 L24,2" /></svg></div>
+      <div class="boot-corner tr"><svg viewBox="0 0 46 46"><path d="M22,2 L44,2 L44,24" /></svg></div>
+      <div class="boot-corner bl"><svg viewBox="0 0 46 46"><path d="M2,22 L2,44 L24,44" /></svg></div>
+      <div class="boot-corner br"><svg viewBox="0 0 46 46"><path d="M44,22 L44,44 L22,44" /></svg></div>
+      <div class="boot-telemetry a">SYS <span>ONLINE</span></div>
+      <div class="boot-telemetry b">REV 0.2.0</div>
+      <div class="boot-telemetry c">NODE <span>READY</span></div>
+      <div class="boot-telemetry d">LINK --</div>
+    </div>
+
+    <div class="boot-vignette" aria-hidden="true"></div>
+
+    <div class="boot-center">
+      <div class="boot-mark-wrap">
+        <svg class="boot-mark" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="boot-orbit boot-orbit-1" cx="100" cy="100" r="94" />
+          <circle class="boot-orbit boot-orbit-2" cx="100" cy="100" r="80" />
+          <circle class="boot-mark-halo" cx="100" cy="100" r="86" />
+          <polygon class="boot-mark-facet boot-mark-facet-1" points="100,20 165,58 165,142 100,180 35,142 35,58" />
+          <polygon class="boot-mark-facet boot-mark-facet-2" points="100,40 148,68 148,132 100,160 52,132 52,68" />
+          <polygon class="boot-mark-facet boot-mark-facet-3" points="100,58 133,77 133,115 100,134 67,115 67,77" />
+          <line class="boot-mark-stem" x1="100" y1="46" x2="100" y2="96" />
+          <circle class="boot-mark-core" cx="100" cy="122" r="5" />
+          <g aria-hidden="true">
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:1.65s" transform="rotate(0 100 100)" />
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:1.72s" transform="rotate(60 100 100)" />
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:1.79s" transform="rotate(120 100 100)" />
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:1.86s" transform="rotate(180 100 100)" />
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:1.93s" transform="rotate(240 100 100)" />
+            <line class="boot-spoke" x1="100" y1="14" x2="100" y2="34" style="animation-delay:2.0s" transform="rotate(300 100 100)" />
+          </g>
+        </svg>
+      </div>
+
+      <div class="boot-wordmark" aria-hidden="true">
+        <span class="boot-letter" style="--i:0">X</span><span class="boot-letter" style="--i:1">C</span><span class="boot-letter" style="--i:2">L</span><span class="boot-letter" style="--i:3">O</span><span class="boot-letter" style="--i:4">U</span><span class="boot-letter" style="--i:5">D</span>
+      </div>
+      <div class="boot-subword" aria-hidden="true">WEB</div>
+      <div class="boot-tagline" aria-hidden="true">
+        <span class="boot-tagline-line"></span>
+        <span class="boot-tagline-text">Cloud console streaming</span>
+        <span class="boot-tagline-line"></span>
+      </div>
+
+      <div class="boot-status" aria-hidden="true">
+        <span class="boot-status-bar"></span>
+        <span id="boot-status-text">
+          <span class="boot-status-line">Initializing renderer</span>
+          <span class="boot-status-line">Negotiating stream link</span>
+          <span class="boot-status-line is-final">Establishing session</span>
+        </span>
+      </div>
+    </div>
+
+    <button id="boot-skip" type="button" aria-label="Skip boot animation">Skip<span class="boot-skip-key" aria-hidden="true">Esc</span></button>
+  </div>
+
+  <section id="screen-account" class="screen">
+    <div class="brand-pane">
+      <svg class="power-glyph" viewBox="0 0 84 84" aria-hidden="true">
+        <path class="ring" d="M56.8 13.6 A32 32 0 1 1 27.2 13.6" />
+        <line class="stem" x1="42" y1="8" x2="42" y2="38" />
+      </svg>
+      <p class="brand-eyebrow">Multi-user streaming client</p>
+      <h2 class="brand-title">xCloud<br />Web</h2>
+      <p class="brand-sub">Create an account, then connect your own Xbox login. Each account's Xbox session is completely separate from everyone else's.</p>
+    </div>
+
+    <div class="action-pane">
+      <div class="card">
+        <h1>xCloud Web</h1>
+        <div class="tab-row" role="tablist">
+          <button id="tab-login" class="tab-btn active" role="tab" aria-selected="true">Log in</button>
+          <button id="tab-register" class="tab-btn" role="tab" aria-selected="false">Create account</button>
+        </div>
+
+        <form id="form-login" class="account-form">
+          <p class="card-kicker">Log in</p>
+          <h2 class="card-heading">Welcome back</h2>
+          <label class="field-label" for="login-username">Username</label>
+          <input id="login-username" class="field-input" type="text" autocomplete="username" required />
+          <label class="field-label" for="login-password">Password</label>
+          <input id="login-password" class="field-input" type="password" autocomplete="current-password" required />
+          <button type="submit" class="btn-primary">Log in</button>
+          <p id="login-error" class="error hidden"></p>
+        </form>
+
+        <form id="form-register" class="account-form hidden">
+          <p class="card-kicker">Create account</p>
+          <h2 class="card-heading">Set up your account</h2>
+          <p class="muted small">This is separate from your Xbox login — you'll connect that in the next step, and only you will ever see it.</p>
+          <label class="field-label" for="register-username">Username</label>
+          <input id="register-username" class="field-input" type="text" autocomplete="username" minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" required />
+          <p class="field-hint">3-32 characters: letters, numbers, underscore, or hyphen.</p>
+          <label class="field-label" for="register-password">Password</label>
+          <input id="register-password" class="field-input" type="password" autocomplete="new-password" minlength="8" required />
+          <p class="field-hint">At least 8 characters.</p>
+          <button type="submit" class="btn-primary">Create account</button>
+          <p id="register-error" class="error hidden"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-signin" class="screen hidden">
+    <div class="brand-pane">
+      <svg class="power-glyph" viewBox="0 0 84 84" aria-hidden="true">
+        <path class="ring" d="M56.8 13.6 A32 32 0 1 1 27.2 13.6" />
+        <line class="stem" x1="42" y1="8" x2="42" y2="38" />
+      </svg>
+      <p class="brand-eyebrow">Step 2 of 2</p>
+      <h2 class="brand-title">xCloud<br />Web</h2>
+      <p class="brand-sub">Stream your console or Game Pass library straight from the browser. No app install, no extra hop.</p>
+    </div>
+
+    <div class="action-pane">
+      <div class="card">
+        <h1>xCloud Web</h1>
+        <p class="card-kicker">Sign in</p>
+        <h2 class="card-heading">Connect your Microsoft account</h2>
+        <p id="signin-idle" class="muted">You'll get a one-time code to enter on Microsoft's site — nothing typed here.</p>
+        <button id="btn-signin" class="btn-primary">Sign in with Microsoft</button>
+
+        <div id="device-code-box" class="hidden">
+          <p class="muted small">Go to</p>
+          <a id="verification-link" class="link-big" href="https://microsoft.com/link" target="_blank" rel="noopener">microsoft.com/link</a>
+          <p class="muted small">and enter this code:</p>
+          <div class="code-row">
+            <div id="user-code" class="code"></div>
+            <button id="btn-copy-code" class="btn-copy" title="Copy code" aria-label="Copy code">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="9" width="12" height="12" rx="2" />
+                <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+              </svg>
+            </button>
+          </div>
+          <p class="muted small">This page updates on its own once you finish signing in.</p>
+        </div>
+
+        <p id="signin-error" class="error hidden"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-status" class="screen hidden">
+    <div class="action-pane" style="grid-column: 1 / -1;">
+      <div class="card">
+        <svg class="power-glyph active" viewBox="0 0 84 84" aria-hidden="true">
+          <path class="ring" d="M56.8 13.6 A32 32 0 1 1 27.2 13.6" />
+          <line class="stem" x1="42" y1="8" x2="42" y2="38" />
+        </svg>
+        <h1>xCloud Web</h1>
+        <p id="status-text" class="muted">Loading streaming tokens…</p>
+        <p id="status-error" class="error hidden"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-library" class="screen hidden">
+    <header class="topbar">
+      <span class="topbar-brand">
+        <svg class="power-glyph" viewBox="0 0 84 84" aria-hidden="true">
+          <path class="ring" d="M56.8 13.6 A32 32 0 1 1 27.2 13.6" />
+          <line class="stem" x1="42" y1="8" x2="42" y2="38" />
+        </svg>
+        xCloud Web
+      </span>
+      <div class="topbar-actions">
+        <span id="topbar-username" class="topbar-username muted small"></span>
+        <button id="btn-export-session" class="btn-link" title="Download your Xbox session as a file — keep it private, it works like a password">Export session</button>
+        <button id="btn-import-session" class="btn-link" title="Restore a previously exported Xbox session file">Import session</button>
+        <input id="import-session-input" type="file" accept="application/json,.json" class="hidden" />
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <button id="btn-signout" class="btn-link">Sign out of Xbox</button>
+        <button id="btn-logout" class="btn-link">Log out</button>
+      </div>
+    </header>
+
+    <div class="library-body">
+      <div class="panel panel-consoles">
+        <h2>Consoles</h2>
+        <div id="console-list" class="grid grid-consoles"></div>
+      </div>
+
+      <div class="panel panel-catalog">
+        <div class="panel-heading-row">
+          <h2>Game Pass</h2>
+          <div class="catalog-search">
+            <input id="catalog-search-input" type="search" placeholder="Filter games…" autocomplete="off" />
+          </div>
+        </div>
+        <div id="catalog-status" class="muted small hidden"></div>
+        <div id="catalog-grid" class="grid grid-catalog"></div>
+
+        <details class="manual-launch">
+          <summary>Launch by Title ID instead</summary>
+          <div class="cloud-launch">
+            <input id="cloud-title-id" type="text" placeholder="Title ID" />
+            <button id="btn-launch-cloud" class="btn-primary">Play</button>
+          </div>
+        </details>
+      </div>
+    </div>
+
+  </section>
+
+  <section id="screen-stream" class="screen hidden">
+    <div id="streamHolder"></div>
+    <div class="hud">
+      <button id="btn-back" class="btn-link">← Back</button>
+      <div id="connection-status" class="status-badge" data-state="connecting">
+        <span class="signal-bars" aria-hidden="true">
+          <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+        </span>
+        <span id="connection-status-text">-</span>
+      </div>
+      <div class="hud-right">
+        <span id="input-indicator" class="muted small" title="Tap to show input diagnostics">keyboard</span>
+        <button id="btn-fullscreen" class="btn-icon" title="Fullscreen" aria-label="Toggle fullscreen">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <pre id="input-diag" class="hidden" style="position:fixed;bottom:0;left:0;right:0;max-height:45vh;overflow:auto;margin:0;padding:10px;font-size:11px;line-height:1.4;background:rgba(0,0,0,0.88);color:#7CFC7C;z-index:9999;white-space:pre-wrap;word-break:break-word;"></pre>
+  </section>
+
+  <div id="toast-stack" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

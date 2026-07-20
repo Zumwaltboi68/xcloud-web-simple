@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: xcloud-web
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+    # See README.md "Persistence and Render's free tier". Everything
+    # under data/ (registered accounts + every user's Xbox tokens) lives
+    # on local disk, which Render's free tier wipes on every restart or
+    # redeploy. There's no way around that without a paid persistent
+    # disk — the app's Export/Import Xbox session buttons exist
+    # specifically as a workaround: export before you redeploy, import
+    # after. Registered accounts themselves aren't exportable the same
+    # way; losing data/users.json means re-registering.
